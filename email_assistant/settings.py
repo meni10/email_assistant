@@ -16,7 +16,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', config("SECRET_KEY", default='fallback
 DEBUG = os.environ.get('DEBUG', config("DEBUG", default='False')) == 'True'
 
 # More robust ALLOWED_HOSTS configuration
-DEFAULT_ALLOWED_HOSTS = '127.0.0.1,localhost,email-assistt.onrender.com,email-assistant.onrender.com'
+DEFAULT_ALLOWED_HOSTS = '127.0.0.1,localhost,email-assistant-eh8y.onrender.com'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS).split(',')
 
 # If we're in production, add additional security settings
