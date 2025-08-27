@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from decouple import config, Csv
 import dj_database_url
+import logging
+import sys
 
 # --------------------------------------------------------------------
 # BASE DIRECTORY
@@ -16,8 +18,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', config("SECRET_KEY", default='fallback
 DEBUG = os.environ.get('DEBUG', config("DEBUG", default='False')) == 'True'
 
 # More robust ALLOWED_HOSTS configuration
-DEFAULT_ALLOWED_HOSTS = '127.0.0.1,localhost,email-assistant-eh8y.onrender.com'
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS).split(',')
+DEFAULT_ALLOWED_HOSTS = "127.0.0.1,localhost,email-assistt.onrender.com"
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS).split(",")
 
 # If we're in production, add additional security settings
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -28,7 +30,6 @@ if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
 if not DEBUG:
     CSRF_TRUSTED_ORIGINS = [
         'https://email-assistt.onrender.com',
-        'https://email-assistant.onrender.com',
     ]
     if RENDER_EXTERNAL_HOSTNAME:
         CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
@@ -129,15 +130,12 @@ USE_TZ = True
 # --------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
 # Add compression and caching for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 # Ensure static directory exists
 static_dir = BASE_DIR / "static"
 if not static_dir.exists():
     static_dir.mkdir(exist_ok=True)
-
 STATICFILES_DIRS = [static_dir]
 
 # Media files configuration
@@ -157,17 +155,36 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",  # allauth
 ]
 LOGIN_REDIRECT_URL = "/"     # change to '/inbox/' if you want dashboard directly
-LOGOUT_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"    # Ensure logout redirects to home page
 
-SOCIALACCOUNT_PROVIDERS = {
-    "google": {
-        "APP": {
-            "client_id": config("GOOGLE_CLIENT_ID"),
-            "secret": config("GOOGLE_CLIENT_SECRET"),
-            "key": ""
+# Google OAuth configuration with better error handling
+try:
+    SOCIALACCOUNT_PROVIDERS = {
+        "google": {
+            "APP": {
+                "client_id": config("GOOGLE_CLIENT_ID"),
+                "secret": config("GOOGLE_CLIENT_SECRET"),
+                "key": ""
+            }
         }
     }
-}
+    # Test if the credentials are available
+    if not config("GOOGLE_CLIENT_ID") or not config("GOOGLE_CLIENT_SECRET"):
+        raise ValueError("Google OAuth credentials are not configured")
+except Exception as e:
+    # Log the error but don't crash the application
+    logger = logging.getLogger(__name__)
+    logger.error(f"Google OAuth configuration error: {str(e)}")
+    # Use empty configuration to prevent crashes
+    SOCIALACCOUNT_PROVIDERS = {
+        "google": {
+            "APP": {
+                "client_id": "",
+                "secret": "",
+                "key": ""
+            }
+        }
+    }
 
 # --------------------------------------------------------------------
 # GOOGLE OAUTH: Allow HTTP in DEBUG
@@ -178,12 +195,19 @@ if DEBUG:
 # --------------------------------------------------------------------
 # GEMINI
 # --------------------------------------------------------------------
-GEMINI_API_KEY = config("GEMINI_API_KEY", default=None)
-GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-1.5-flash")
-if DEBUG and GEMINI_API_KEY:
-    print("✅ Gemini API Key loaded successfully")
-elif DEBUG:
-    print("⚠️  GEMINI_API_KEY not found in .env")
+try:
+    GEMINI_API_KEY = config("GEMINI_API_KEY", default=None)
+    GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-1.5-flash")
+    
+    if DEBUG and GEMINI_API_KEY:
+        print("✅ Gemini API Key loaded successfully")
+    elif DEBUG:
+        print("⚠️  GEMINI_API_KEY not found in .env")
+except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Gemini API configuration error: {str(e)}")
+    GEMINI_API_KEY = None
+    GEMINI_MODEL = "gemini-1.5-flash"
 
 # --------------------------------------------------------------------
 # SESSIONS (Database-backed)
@@ -216,7 +240,6 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.AllowAny",  # allow API without login
     ],
 }
-
 # If using React frontend for login
 LOGIN_URL = None
 
@@ -285,3 +308,35 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+
+# --------------------------------------------------------------------
+# VALIDATION FOR REQUIRED ENVIRONMENT VARIABLES
+# --------------------------------------------------------------------
+def validate_environment_variables():
+    """Validate that required environment variables are set"""
+    required_vars = {
+        'GOOGLE_CLIENT_ID': 'Google OAuth Client ID',
+        'GOOGLE_CLIENT_SECRET': 'Google OAuth Client Secret',
+        'GEMINI_API_KEY': 'Gemini API Key',
+    }
+    
+    missing_vars = []
+    for var, description in required_vars.items():
+        if not config(var, default=None):
+            missing_vars.append(f"{var} ({description})")
+    
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+        if DEBUG:
+            print(f"WARNING: {error_msg}", file=sys.stderr)
+        else:
+            logger = logging.getLogger(__name__)
+            logger.error(error_msg)
+        
+        # In production, we might want to raise an exception for critical variables
+        if not DEBUG and 'GOOGLE_CLIENT_ID' in [v.split(' ')[0] for v in missing_vars]:
+            # Google OAuth is critical for this app
+            raise EnvironmentError(error_msg)
+
+# Validate environment variables when settings are loaded
+validate_environment_variables()
