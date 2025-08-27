@@ -1,0 +1,23 @@
+# Create the render.yaml file with the correct configuration
+@"
+services:
+  - type: web
+    name: email-assistant
+    env: python
+    buildCommand: "./email_assistant/build.sh"
+    startCommand: "gunicorn email_assistant.wsgi:application"
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.9.6
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+"@ | Out-File -FilePath render.yaml -Encoding UTF8
+
+# Verify the file was created
+Get-Content render.yaml
