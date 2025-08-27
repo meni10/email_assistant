@@ -19,7 +19,19 @@ DEBUG = os.environ.get('DEBUG', config("DEBUG", default='False')) == 'True'
 if DEBUG:
     ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost").split(",")
 else:
-    ALLOWED_HOSTS = ['*']  # Allow all in production
+    # Allow Render domain and any other production domains
+    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    if RENDER_EXTERNAL_HOSTNAME:
+        ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME, 'email-assistt.onrender.com', 'email-assistant.onrender.com']
+    else:
+        ALLOWED_HOSTS = ['email-assistt.onrender.com', 'email-assistant.onrender.com', 'localhost', '127.0.0.1']
+
+# Add CSRF trusted origins for production
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        'https://email-assistt.onrender.com',
+        'https://email-assistant.onrender.com',
+    ]
 
 # --------------------------------------------------------------------
 # APPLICATIONS
@@ -90,6 +102,7 @@ DATABASES = {
         default=config('DATABASE_URL', default='sqlite:///' + str(BASE_DIR / 'db.sqlite3')),
         conn_max_age=600,
         conn_health_checks=True,
+        ssl_require=not DEBUG,  # Require SSL in production
     )
 }
 
@@ -117,12 +130,15 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Only add STATICFILES_DIRS if the directory exists
+# Add compression and caching for static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Ensure static directory exists
 static_dir = BASE_DIR / "static"
-if static_dir.exists():
-    STATICFILES_DIRS = [static_dir]
-else:
-    STATICFILES_DIRS = []
+if not static_dir.exists():
+    static_dir.mkdir(exist_ok=True)
+
+STATICFILES_DIRS = [static_dir]
 
 # Media files configuration
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -180,6 +196,8 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 if not DEBUG:
     SESSION_COOKIE_SECURE = True  # Use HTTPS in production
     CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
 else:
     SESSION_COOKIE_SECURE = False  # Disable in dev
     CSRF_COOKIE_SECURE = False
@@ -256,3 +274,14 @@ CACHES = {
         'VERSION': 1,  # Default version number for cache keys
     }
 }
+
+# --------------------------------------------------------------------
+# EMAIL CONFIGURATION
+# --------------------------------------------------------------------
+EMAIL_BACKEND = config('EMAIL_BACKEND', 
+                      default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
