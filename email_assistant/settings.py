@@ -5,6 +5,8 @@ from decouple import config
 import dj_database_url
 import logging
 
+logging.disable(logging.CRITICAL)
+
 # ───────────────────────────────
 # 📁 BASE DIRECTORY
 # ───────────────────────────────
