@@ -1,1 +1,10 @@
+# Force Python detection
 *.py linguist-detectable=true
+
+# Ignore JS/CSS files from stats
+*.js linguist-detectable=false
+*.jsx linguist-detectable=false
+*.ts linguist-detectable=false
+*.tsx linguist-detectable=false
+*.css linguist-detectable=false
+*.html linguist-detectable=false
