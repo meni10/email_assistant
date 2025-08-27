@@ -15,16 +15,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', config("SECRET_KEY", default='fallback-secret-key-for-development'))
 DEBUG = os.environ.get('DEBUG', config("DEBUG", default='False')) == 'True'
 
-# Allow all hosts in production, specific hosts in development
-if DEBUG:
-    ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost").split(",")
-else:
-    # Allow Render domain and any other production domains
-    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-    if RENDER_EXTERNAL_HOSTNAME:
-        ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME, 'email-assistt.onrender.com', 'email-assistant.onrender.com']
-    else:
-        ALLOWED_HOSTS = ['email-assistt.onrender.com', 'email-assistant.onrender.com', 'localhost', '127.0.0.1']
+# More robust ALLOWED_HOSTS configuration
+DEFAULT_ALLOWED_HOSTS = '127.0.0.1,localhost,email-assistt.onrender.com,email-assistant.onrender.com'
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS).split(',')
+
+# If we're in production, add additional security settings
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Add CSRF trusted origins for production
 if not DEBUG:
@@ -32,6 +30,8 @@ if not DEBUG:
         'https://email-assistt.onrender.com',
         'https://email-assistant.onrender.com',
     ]
+    if RENDER_EXTERNAL_HOSTNAME:
+        CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
 
 # --------------------------------------------------------------------
 # APPLICATIONS
