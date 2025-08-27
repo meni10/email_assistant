@@ -1,52 +1,55 @@
 import os
+import sys
 from pathlib import Path
-from decouple import config, Csv
+from decouple import config
 import dj_database_url
 import logging
-import sys
 
-# --------------------------------------------------------------------
-# BASE DIRECTORY
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 📁 BASE DIRECTORY
+# ───────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --------------------------------------------------------------------
-# SECURITY
-# --------------------------------------------------------------------
-# Use environment variables with fallback to decouple config
-SECRET_KEY = os.environ.get('SECRET_KEY', config("SECRET_KEY", default='fallback-secret-key-for-development'))
-DEBUG = os.environ.get('DEBUG', config("DEBUG", default='False')) == 'True'
+# ───────────────────────────────
+# 🔐 SECURITY
+# ───────────────────────────────
+SECRET_KEY = config("SECRET_KEY", default='fallback-secret-key-for-dev')
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-# More robust ALLOWED_HOSTS configuration
-DEFAULT_ALLOWED_HOSTS = "127.0.0.1,localhost,email-assistt.onrender.com"
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS).split(",")
+# ALLOWED_HOSTS — Render-friendly setup
+DEFAULT_ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    "email-assistt.onrender.com",
+]
 
-# If we're in production, add additional security settings
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+# Render dynamically injects this for your service domain
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default=",".join(DEFAULT_ALLOWED_HOSTS)).split(",")
+
+# Ensure Render domain is added
 if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-# Add CSRF trusted origins for production
+# CSRF trusted origins (Render production)
+CSRF_TRUSTED_ORIGINS = []
 if not DEBUG:
-    CSRF_TRUSTED_ORIGINS = [
-        'https://email-assistt.onrender.com',
-    ]
-    if RENDER_EXTERNAL_HOSTNAME:
-        CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
+    CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if not host.startswith("127.")]
 
-# --------------------------------------------------------------------
-# APPLICATIONS
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 📦 INSTALLED APPS
+# ───────────────────────────────
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles", 
+    "django.contrib.staticfiles",
     "inbox",  # Your app
-    'django_extensions',  # For additional Django management tools
-    'rest_framework',
+    "rest_framework",
+    "django_extensions",
     "django.contrib.sites",
     "allauth",
     "allauth.account",
@@ -55,12 +58,12 @@ INSTALLED_APPS = [
 ]
 SITE_ID = 1
 
-# --------------------------------------------------------------------
-# MIDDLEWARE
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🧱 MIDDLEWARE
+# ───────────────────────────────
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # ADD THIS FOR RENDER
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # For static files
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -70,19 +73,19 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# --------------------------------------------------------------------
-# URLS / WSGI
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🌐 URL + WSGI
+# ───────────────────────────────
 ROOT_URLCONF = "email_assistant.urls"
 WSGI_APPLICATION = "email_assistant.wsgi.application"
 
-# --------------------------------------------------------------------
-# TEMPLATES
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 📐 TEMPLATES
+# ───────────────────────────────
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],  # global templates dir
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -94,22 +97,21 @@ TEMPLATES = [
     },
 ]
 
-# --------------------------------------------------------------------
-# DATABASE
-# --------------------------------------------------------------------
-# Use the database URL from environment variable (Render provides DATABASE_URL)
+# ───────────────────────────────
+# 🛢 DATABASE (Render uses DATABASE_URL)
+# ───────────────────────────────
 DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL', default='sqlite:///' + str(BASE_DIR / 'db.sqlite3')),
+    "default": dj_database_url.config(
+        default=config("DATABASE_URL", default="sqlite:///" + str(BASE_DIR / "db.sqlite3")),
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=not DEBUG,  # Require SSL in production
+        ssl_require=not DEBUG,
     )
 }
 
-# --------------------------------------------------------------------
-# PASSWORD VALIDATION
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🔒 PASSWORD VALIDATORS
+# ───────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -117,226 +119,164 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# --------------------------------------------------------------------
-# INTERNATIONALIZATION
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🌍 I18N
+# ───────────────────────────────
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# --------------------------------------------------------------------
-# STATIC FILES (CSS, JS, Images)
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 📁 STATIC / MEDIA FILES
+# ───────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# Add compression and caching for static files
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-# Ensure static directory exists
-static_dir = BASE_DIR / "static"
-if not static_dir.exists():
-    static_dir.mkdir(exist_ok=True)
-STATICFILES_DIRS = [static_dir]
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Media files configuration
-MEDIA_ROOT = BASE_DIR / 'media'
-MEDIA_URL = '/media/'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
-# --------------------------------------------------------------------
-# DEFAULT PRIMARY KEY FIELD TYPE
-# --------------------------------------------------------------------
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# --------------------------------------------------------------------
-# AUTHENTICATION (Allauth / Google Login)
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🔑 AUTHENTICATION
+# ───────────────────────────────
 AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",  # default
-    "allauth.account.auth_backends.AuthenticationBackend",  # allauth
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
-LOGIN_REDIRECT_URL = "/"     # change to '/inbox/' if you want dashboard directly
-LOGOUT_REDIRECT_URL = "/"    # Ensure logout redirects to home page
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+LOGIN_URL = None
 
-# Google OAuth configuration with better error handling
+# Google OAuth
 try:
     SOCIALACCOUNT_PROVIDERS = {
         "google": {
             "APP": {
-                "client_id": config("GOOGLE_CLIENT_ID"),
-                "secret": config("GOOGLE_CLIENT_SECRET"),
-                "key": ""
+                "client_id": config("GOOGLE_CLIENT_ID", default=""),
+                "secret": config("GOOGLE_CLIENT_SECRET", default=""),
+                "key": "",
             }
         }
     }
-    # Test if the credentials are available
-    if not config("GOOGLE_CLIENT_ID") or not config("GOOGLE_CLIENT_SECRET"):
-        raise ValueError("Google OAuth credentials are not configured")
 except Exception as e:
-    # Log the error but don't crash the application
-    logger = logging.getLogger(__name__)
-    logger.error(f"Google OAuth configuration error: {str(e)}")
-    # Use empty configuration to prevent crashes
-    SOCIALACCOUNT_PROVIDERS = {
-        "google": {
-            "APP": {
-                "client_id": "",
-                "secret": "",
-                "key": ""
-            }
-        }
-    }
+    logging.getLogger(__name__).error(f"OAuth config failed: {e}")
 
-# --------------------------------------------------------------------
-# GOOGLE OAUTH: Allow HTTP in DEBUG
-# --------------------------------------------------------------------
-if DEBUG:
-    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
-# --------------------------------------------------------------------
-# GEMINI
-# --------------------------------------------------------------------
-try:
-    GEMINI_API_KEY = config("GEMINI_API_KEY", default=None)
-    GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-1.5-flash")
-    
-    if DEBUG and GEMINI_API_KEY:
-        print("✅ Gemini API Key loaded successfully")
-    elif DEBUG:
-        print("⚠️  GEMINI_API_KEY not found in .env")
-except Exception as e:
-    logger = logging.getLogger(__name__)
-    logger.error(f"Gemini API configuration error: {str(e)}")
-    GEMINI_API_KEY = None
-    GEMINI_MODEL = "gemini-1.5-flash"
-
-# --------------------------------------------------------------------
-# SESSIONS (Database-backed)
-# --------------------------------------------------------------------
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE = 3600  # 1 hour
+# ───────────────────────────────
+# 🔐 COOKIE + SESSION
+# ───────────────────────────────
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_AGE = 3600
+SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
-# Set this to False if running locally (HTTP)
 if not DEBUG:
-    SESSION_COOKIE_SECURE = True  # Use HTTPS in production
+    SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = "Lax"
 else:
-    SESSION_COOKIE_SECURE = False  # Disable in dev
-    CSRF_COOKIE_SECURE = False
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-SESSION_SAVE_EVERY_REQUEST = True
+# ───────────────────────────────
+# 🤖 GEMINI API (optional)
+# ───────────────────────────────
+GEMINI_API_KEY = config("GEMINI_API_KEY", default=None)
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemini-1.5-flash")
 
-# --------------------------------------------------------------------
-# REST FRAMEWORK
-# --------------------------------------------------------------------
+# ───────────────────────────────
+# 🧩 REST FRAMEWORK
+# ───────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",  # allow API without login
+        "rest_framework.permissions.AllowAny",
     ],
 }
-# If using React frontend for login
-LOGIN_URL = None
 
-# --------------------------------------------------------------------
-# LOGGING
-# --------------------------------------------------------------------
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'level': 'WARNING',  # Change from INFO to WARNING to reduce verbosity
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'level': 'INFO',  # Keep detailed logs in a file
-            'class': 'logging.FileHandler',
-            'filename': 'email_assistant.log',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'inbox': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
+# ───────────────────────────────
+# 📧 EMAIL CONFIG (optional)
+# ───────────────────────────────
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 
-# --------------------------------------------------------------------
-# CACHE
-# --------------------------------------------------------------------
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
-        'TIMEOUT': 300,  # Default timeout in seconds
-        'OPTIONS': {
-            'MAX_ENTRIES': 1000,  # Maximum number of entries to store
-            'CULL_FREQUENCY': 3,  # The fraction of entries to cull when MAX_ENTRIES is reached
-        },
-        'KEY_PREFIX': 'email_assistant',  # Prefix for all cache keys
-        'VERSION': 1,  # Default version number for cache keys
-    }
-}
-
-# --------------------------------------------------------------------
-# EMAIL CONFIGURATION
-# --------------------------------------------------------------------
-EMAIL_BACKEND = config('EMAIL_BACKEND', 
-                      default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-
-# --------------------------------------------------------------------
-# VALIDATION FOR REQUIRED ENVIRONMENT VARIABLES
-# --------------------------------------------------------------------
-def validate_environment_variables():
-    """Validate that required environment variables are set"""
+# ───────────────────────────────
+# 🧪 ENVIRONMENT VALIDATION
+# ───────────────────────────────
+def validate_env():
     required_vars = {
-        'GOOGLE_CLIENT_ID': 'Google OAuth Client ID',
-        'GOOGLE_CLIENT_SECRET': 'Google OAuth Client Secret',
-        'GEMINI_API_KEY': 'Gemini API Key',
+        "GOOGLE_CLIENT_ID": "Google OAuth Client ID",
+        "GOOGLE_CLIENT_SECRET": "Google OAuth Client Secret",
+        "GEMINI_API_KEY": "Gemini API Key",
     }
-    
-    missing_vars = []
-    for var, description in required_vars.items():
-        if not config(var, default=None):
-            missing_vars.append(f"{var} ({description})")
-    
-    if missing_vars:
-        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+    missing = [f"{k} ({v})" for k, v in required_vars.items() if not config(k, default=None)]
+    if missing:
+        msg = "Missing required environment variables: " + ", ".join(missing)
         if DEBUG:
-            print(f"WARNING: {error_msg}", file=sys.stderr)
+            print(f"⚠️  {msg}", file=sys.stderr)
         else:
-            logger = logging.getLogger(__name__)
-            logger.error(error_msg)
-        
-        # In production, we might want to raise an exception for critical variables
-        if not DEBUG and 'GOOGLE_CLIENT_ID' in [v.split(' ')[0] for v in missing_vars]:
-            # Google OAuth is critical for this app
-            raise EnvironmentError(error_msg)
+            logging.getLogger(__name__).error(msg)
+            if "GOOGLE_CLIENT_ID" in [k.split()[0] for k in missing]:
+                raise EnvironmentError(msg)
 
-# Validate environment variables when settings are loaded
-validate_environment_variables()
+validate_env()
+
+# ───────────────────────────────
+# 📦 CACHING (optional)
+# ───────────────────────────────
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+        "TIMEOUT": 300,
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,
+            "CULL_FREQUENCY": 3,
+        },
+        "KEY_PREFIX": "email_assistant",
+        "VERSION": 1,
+    }
+}
+
+# ───────────────────────────────
+# 📊 LOGGING
+# ───────────────────────────────
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+        "inbox": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
